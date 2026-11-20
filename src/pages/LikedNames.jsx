@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from '../context/LanguageContext';
 import { useLikes } from '../context/LikesContext';
 import { useTheme } from '../context/ThemeContext';
-import { namesData } from '../data';
+import namesData from '../data.json';
 import { Search, ArrowUp, ArrowDown, Trash2, ArrowUpRight } from 'lucide-react';
 import {
   ResponsiveContainer,

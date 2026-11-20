@@ -2,8 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from '../context/LanguageContext';
 import { useLikes } from '../context/LikesContext';
-import data from '../data.json';
-const { namesData } = data;
+import namesData from '../data.json';
 import {
   Search,
   ArrowUpRight,

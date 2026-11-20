@@ -48,17 +48,6 @@ export default function About() {
           </p>
         </div>
 
-        <div>
-          <h3 className="text-xs font-medium uppercase tracking-[0.14em] text-[#878075] mb-2">
-            {t.contact}
-          </h3>
-          <a
-            href="mailto:contact@isimbul.com"
-            className="text-sm text-[#161513] dark:text-[#F2EDE4] border-b border-[#D8D1C5] hover:border-[#B84A32] hover:text-[#B84A32] pb-0.5 transition-colors"
-          >
-            contact@isimbul.com
-          </a>
-        </div>
       </section>
     </div>
   );

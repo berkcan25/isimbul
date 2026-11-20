@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { namesData } from '../data';
+import namesData from '../data.json';
 import { useTranslation } from '../context/LanguageContext';
 import { useLikes } from '../context/LikesContext';
 import { getNameMetrics, formatRankNum } from '../utils/nameHelpers';
