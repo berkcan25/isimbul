@@ -2,196 +2,241 @@ import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from '../context/LanguageContext';
 import { useLikes } from '../context/LikesContext';
+import { useTheme } from '../context/ThemeContext';
 import { namesData } from '../data';
-import { Search, ArrowUp, ArrowDown, Trash2, Heart } from 'lucide-react';
-import SearchableSelect from '../components/SearchableSelect'; 
+import { Search, ArrowUp, ArrowDown, Trash2, ArrowUpRight } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+} from 'recharts';
+import SearchableSelect from '../components/SearchableSelect';
+import { getNameMetrics, normalizeSearch, formatRankNum } from '../utils/nameHelpers';
+
+const COMPARE_COLORS = ['#B84A32', '#3F556B', '#536B58', '#B88635', '#7A4E6D'];
+const COMPARE_DASHES = ['', '6 3', '2 2', '8 3 2 3', '4 4'];
 
 export default function LikedNames() {
   const { t, lang } = useTranslation();
   const { likedNames, toggleLike, moveLike } = useLikes();
-  const [search, setSearch] = useState("");
-  
-  const [filters, setFilters] = useState({
-    gender: "all",
-    origin: "all",
-  });
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
 
-  // 1. Data Processing (Get Liked names in order)
+  const [search, setSearch] = useState('');
+  const [filters, setFilters] = useState({ gender: 'all', origin: 'all' });
+
   const myNames = useMemo(() => {
-    return likedNames.map(likedName => {
-        const n = namesData.find(data => data.Name === likedName);
-        if (!n) return null;
-
-        const maleCount = n.Statistics?.Count?.male?.total?.total || 0;
-        const femaleCount = n.Statistics?.Count?.female?.total?.total || 0;
-        const totalCount = maleCount + femaleCount;
-        
-        let gender = 'unisex';
-        if (maleCount > femaleCount * 10) gender = 'male';
-        else if (femaleCount > maleCount * 10) gender = 'female';
-
-        return {
-            ...n,
-            totalCount,
-            gender,
-            currentMeaning: lang === 'tr' ? (n.Meaning_TR || n.Meaning_EN) : (n.Meaning_EN || n.Meaning_TR)
-        };
-    }).filter(Boolean);
+    return likedNames
+      .map((nameStr) => {
+        const raw = namesData.find((d) => d.Name === nameStr);
+        return raw ? getNameMetrics(raw, lang) : null;
+      })
+      .filter(Boolean);
   }, [likedNames, lang]);
 
-  // 2. Filter logic (Updated for Arrays)
   const filteredData = useMemo(() => {
-    return myNames.filter(n => {
-      const matchesSearch = n.Name.toLowerCase().includes(search.toLowerCase());
-      const matchesGender = filters.gender === "all" || n.gender === filters.gender;
-      
-      // --- UPDATED: Check if array includes the filter ---
-      const matchesOrigin = filters.origin === "all" || (Array.isArray(n.Etymology) && n.Etymology.includes(filters.origin));
-      
-      return matchesSearch && matchesGender && matchesOrigin;
+    const q = normalizeSearch(search);
+    return myNames.filter((n) => {
+      if (q && !normalizeSearch(n.Name).includes(q)) return false;
+      if (filters.gender !== 'all' && n.gender !== filters.gender) return false;
+      if (filters.origin !== 'all' && !n.etymologies.includes(filters.origin)) return false;
+      return true;
     });
-  }, [search, filters, myNames]);
+  }, [myNames, search, filters]);
 
-  // --- UPDATED: Use .flat() to get all unique origins from arrays ---
   const uniqueOrigins = useMemo(() => {
-      const allOrigins = myNames.map(n => n.Etymology).flat().filter(Boolean);
-      return [...new Set(allOrigins)].sort();
+    const all = myNames.map((n) => n.etymologies).flat().filter(Boolean);
+    return [...new Set(all)].sort();
   }, [myNames]);
+
+  const compareItems = myNames.slice(0, 5);
+  const compareChartData = useMemo(() => {
+    if (compareItems.length < 2) return [];
+    const eras = compareItems[0].eraData;
+    return eras.map((era, idx) => {
+      const row = { era: lang === 'tr' ? era.labelTr : era.labelEn };
+      compareItems.forEach((item) => {
+        row[item.Name] = item.eraData[idx]?.count || 0;
+      });
+      return row;
+    });
+  }, [compareItems, lang]);
 
   if (likedNames.length === 0) {
     return (
-        <div className="p-6 bg-gray-50 dark:bg-zinc-950 min-h-screen flex flex-col items-center justify-center text-center">
-            <div className="bg-white dark:bg-zinc-900 p-12 rounded-3xl shadow-sm border border-gray-100 dark:border-zinc-800">
-                <Heart className="w-16 h-16 text-gray-300 dark:text-zinc-700 mx-auto mb-4" />
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{t.noFavorites}</h2>
-                <p className="text-gray-500 dark:text-zinc-400 mb-6">{t.addFavorites}</p>
-                <Link to="/" className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors">
-                    {t.back}
-                </Link>
-            </div>
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-20 animate-fade-in">
+        <div className="max-w-xl">
+          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[#B84A32] dark:text-[#DF735B]">
+            0 / {t.favorites}
+          </p>
+          <h1 className="font-editorial text-4xl sm:text-5xl font-medium mt-2">{t.noFavorites}</h1>
+          <p className="text-sm sm:text-base text-[#57524A] dark:text-[#A8A095] mt-3 leading-relaxed">
+            {t.addFavorites}
+          </p>
+          <Link
+            to="/list"
+            className="mt-6 inline-flex items-center gap-2 px-5 py-3 text-xs font-medium uppercase tracking-[0.12em] bg-[#161513] text-[#FAF7F1] dark:bg-[#F2EDE4] dark:text-[#141311] hover:bg-[#B84A32] transition-colors"
+          >
+            <span>{t.exploreAll}</span>
+            <ArrowUpRight className="w-4 h-4" />
+          </Link>
         </div>
+      </div>
     );
   }
 
   return (
-    <div className="p-6 bg-gray-50 dark:bg-zinc-950 min-h-screen transition-colors duration-200">
-      <div className="max-w-4xl mx-auto">
-        
-        {/* Header */}
-        <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-3">
-                <Heart className="w-8 h-8 text-red-500 fill-red-500" />
-                {t.favorites}
-            </h1>
-            <p className="text-gray-500 dark:text-zinc-400">{t.rankHelp}</p>
-        </div>
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-8 sm:pt-12 pb-16 space-y-10 animate-fade-in">
+      <div className="border-b border-[#161513] dark:border-[#443F37] pb-6">
+        <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[#B84A32] dark:text-[#DF735B] tabular-nums">
+          {likedNames.length} / {t.favorites}
+        </p>
+        <h1 className="font-editorial text-4xl sm:text-5xl font-medium mt-1">{t.favorites}</h1>
+        <p className="text-sm text-[#57524A] dark:text-[#A8A095] mt-2">{t.rankHelp}</p>
+      </div>
 
-        {/* Controls */}
-        <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl shadow-sm mb-6 border dark:border-zinc-800 grid grid-cols-1 md:grid-cols-3 gap-4">
-             <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input 
-                    type="text" 
-                    placeholder={t.search}
-                    className="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 outline-none text-gray-900 dark:text-white"
-                    onChange={(e) => setSearch(e.target.value)}
+      {/* Comparison Chart */}
+      {compareItems.length >= 2 ? (
+        <section className="border border-[#D8D1C5] dark:border-[#332F29] bg-[#FAF7F1] dark:bg-[#1D1B18] p-5 sm:p-7">
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[#B84A32] dark:text-[#DF735B]">
+            {t.compareTitle}
+          </p>
+          <p className="text-xs text-[#57524A] dark:text-[#A8A095] mt-1 mb-5">{t.compareSub}</p>
+          <div className="w-full h-64 sm:h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={compareChartData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                <CartesianGrid stroke={isDark ? '#2C2823' : '#E2DBD0'} vertical={false} />
+                <XAxis dataKey="era" stroke={isDark ? '#9A9287' : '#6E675E'} fontSize={12} tickLine={false} />
+                <YAxis stroke={isDark ? '#9A9287' : '#6E675E'} fontSize={12} tickLine={false} axisLine={false} width={52} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: isDark ? '#1D1B18' : '#FAF7F1',
+                    borderColor: isDark ? '#332F29' : '#D8D1C5',
+                    borderRadius: '0px',
+                    fontSize: '12px',
+                  }}
                 />
-             </div>
-             <SearchableSelect
-                label=""
-                placeholder={t.filter_gender}
-                allLabel={t.all}
-                options={[{ value: 'male', label: t.male }, { value: 'female', label: t.female }, { value: 'unisex', label: t.unisex }]}
-                value={filters.gender}
-                onChange={(val) => setFilters({...filters, gender: val})}
-             />
-             <SearchableSelect
-                label=""
-                placeholder={t.filter_origin}
-                allLabel={t.all}
-                options={uniqueOrigins}
-                value={filters.origin}
-                onChange={(val) => setFilters({...filters, origin: val})}
-             />
+                <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }} />
+                {compareItems.map((item, idx) => (
+                  <Line
+                    key={item.Name}
+                    type="monotone"
+                    dataKey={item.Name}
+                    stroke={COMPARE_COLORS[idx % COMPARE_COLORS.length]}
+                    strokeDasharray={COMPARE_DASHES[idx % COMPARE_DASHES.length]}
+                    strokeWidth={2.5}
+                    dot={{ r: 3 }}
+                  />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
+      ) : (
+        <p className="text-sm text-[#57524A] dark:text-[#A8A095] border-l-2 border-[#B84A32] pl-4">
+          {t.singleCompareHint}
+        </p>
+      )}
+
+      {/* Filter Bar */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="relative flex items-center bg-[#FAF7F1] dark:bg-[#1D1B18] border border-[#D8D1C5] dark:border-[#332F29]">
+          <Search className="w-4 h-4 text-[#878075] ml-3" />
+          <input
+            type="text"
+            placeholder={t.search}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full px-3 py-2.5 bg-transparent text-sm focus:outline-none"
+          />
         </div>
+        <SearchableSelect
+          allLabel={t.all}
+          options={[
+            { value: 'female', label: t.female },
+            { value: 'male', label: t.male },
+            { value: 'unisex', label: t.unisex },
+          ]}
+          value={filters.gender}
+          onChange={(val) => setFilters({ ...filters, gender: val })}
+        />
+        <SearchableSelect
+          allLabel={t.all}
+          options={uniqueOrigins}
+          value={filters.origin}
+          onChange={(val) => setFilters({ ...filters, origin: val })}
+        />
+      </div>
 
-        {/* List */}
-        <div className="space-y-3">
-            {filteredData.map((name, index) => {
-                // Ensure Etymology is always an array
-                const etymologies = Array.isArray(name.Etymology) ? name.Etymology : [name.Etymology].filter(Boolean);
-                
-                const realIndex = likedNames.indexOf(name.Name);
-                const isFirst = realIndex === 0;
-                const isLast = realIndex === likedNames.length - 1;
+      {/* Rearrangeable List */}
+      <div className="divide-y divide-[#D8D1C5] dark:divide-[#2C2823] border-y border-[#D8D1C5] dark:border-[#2C2823]">
+        {filteredData.map((name) => {
+          const realIndex = likedNames.indexOf(name.Name);
+          return (
+            <div
+              key={name.Name}
+              className="py-5 flex items-center justify-between gap-4 hover:bg-[#EAE4D8]/50 dark:hover:bg-[#1D1B18] px-2 transition-colors"
+            >
+              <div className="flex items-center gap-4 min-w-0 flex-1">
+                <span
+                  className="w-2.5 h-2.5 shrink-0"
+                  style={{
+                    backgroundColor:
+                      realIndex < 5 ? COMPARE_COLORS[realIndex] : '#878075',
+                  }}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-baseline gap-3">
+                    <Link
+                      to={`/name/${encodeURIComponent(name.Name)}`}
+                      className="font-editorial text-3xl font-medium hover:text-[#B84A32] dark:hover:text-[#DF735B] transition-colors"
+                    >
+                      {name.Name}
+                    </Link>
+                    <span className="text-xs uppercase tracking-[0.1em] text-[#878075] tabular-nums">
+                      #{formatRankNum(name.bestRank)} · {t[name.gender]} · {name.etymologies.join(' / ')}
+                    </span>
+                  </div>
+                  <p className="text-sm text-[#57524A] dark:text-[#A8A095] truncate mt-1">
+                    {name.currentMeaning || t.noMeaning}
+                  </p>
+                </div>
+              </div>
 
-                return (
-                    <div key={name.Name} className="group bg-white dark:bg-zinc-900 p-4 rounded-xl border border-gray-200 dark:border-zinc-800 shadow-sm hover:shadow-md transition-all flex items-center gap-4">
-                        
-                        {/* Rank Controls */}
-                        <div className="flex flex-col items-center gap-1 pr-3 border-r border-gray-100 dark:border-zinc-800">
-                            <button 
-                                onClick={() => moveLike(realIndex, realIndex - 1)}
-                                disabled={isFirst || search !== ""} 
-                                className="p-1 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded text-gray-400 hover:text-blue-600 disabled:opacity-20"
-                            >
-                                <ArrowUp className="w-4 h-4" />
-                            </button>
-                            <span className="text-xs font-bold text-gray-300 dark:text-zinc-700 font-mono">
-                                {realIndex + 1}
-                            </span>
-                            <button 
-                                onClick={() => moveLike(realIndex, realIndex + 1)}
-                                disabled={isLast || search !== ""}
-                                className="p-1 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded text-gray-400 hover:text-blue-600 disabled:opacity-20"
-                            >
-                                <ArrowDown className="w-4 h-4" />
-                            </button>
-                        </div>
-
-                        {/* Content */}
-                        <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <Link to={`/name/${name.Name}`} className="text-lg font-bold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                                        {name.Name}
-                                    </Link>
-                                    <p className="text-sm text-gray-500 dark:text-zinc-400 truncate">{name.currentMeaning}</p>
-                                </div>
-                                <div className="text-right flex flex-col items-end gap-1">
-                                    <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border ${
-                                        name.gender === 'male' ? 'bg-blue-50 border-blue-100 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400' : 
-                                        name.gender === 'female' ? 'bg-pink-50 border-pink-100 text-pink-700 dark:bg-pink-900/20 dark:border-pink-800 dark:text-pink-400' : 
-                                        'bg-purple-50 border-purple-100 text-purple-700'
-                                    }`}>
-                                        {t[name.gender]}
-                                    </span>
-                                    
-                                    {/* --- UPDATED: Render Etymology Badges --- */}
-                                    <div className="flex flex-wrap justify-end gap-1 mt-1">
-                                        {etymologies.map((etym, i) => (
-                                            <span key={i} className="text-[10px] bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-zinc-400 px-1.5 py-0.5 rounded border border-gray-200 dark:border-zinc-700">
-                                                {etym}
-                                            </span>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Actions */}
-                        <button 
-                            onClick={() => toggleLike(name.Name)}
-                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                            title="Remove"
-                        >
-                            <Trash2 className="w-5 h-5" />
-                        </button>
-                    </div>
-                );
-            })}
-        </div>
-
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => moveLike(realIndex, realIndex - 1)}
+                  disabled={realIndex === 0 || search !== ''}
+                  className="p-1.5 text-[#878075] hover:text-[#161513] dark:hover:text-[#F2EDE4] disabled:opacity-25"
+                >
+                  <ArrowUp className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveLike(realIndex, realIndex + 1)}
+                  disabled={realIndex === likedNames.length - 1 || search !== ''}
+                  className="p-1.5 text-[#878075] hover:text-[#161513] dark:hover:text-[#F2EDE4] disabled:opacity-25"
+                >
+                  <ArrowDown className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleLike(name.Name)}
+                  className="p-1.5 text-[#878075] hover:text-[#B84A32]"
+                  title="Remove"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

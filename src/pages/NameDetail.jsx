@@ -1,284 +1,363 @@
-import { useParams, Link } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from '../context/LanguageContext';
 import { useLikes } from '../context/LikesContext';
-import { namesData } from '../data';
 import { useTheme } from '../context/ThemeContext';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { ArrowLeft, BookOpen, Copy, GitBranch, Heart, Share2, Users } from 'lucide-react'; 
-import { useMemo } from 'react';
+import { namesData } from '../data';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts';
+import { ArrowLeft, ArrowUpRight, Heart, Share2, Check } from 'lucide-react';
+import { getNameMetrics, formatRankNum } from '../utils/nameHelpers';
 
 export default function NameDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { t, lang } = useTranslation();
   const { isLiked, toggleLike } = useLikes();
   const { theme } = useTheme();
-  const isDarkMode = theme === "dark";
+  const isDark = theme === 'dark';
 
-  const nameData = namesData.find(n => n.Name === id);
+  const [chartMode, setChartMode] = useState('total');
+  const [copied, setCopied] = useState(false);
 
-  // --- Share Logic ---
+  const decodedId = decodeURIComponent(id || '');
+  const raw = namesData.find((n) => n.Name === decodedId);
+
+  const item = useMemo(() => (raw ? getNameMetrics(raw, lang) : null), [raw, lang]);
+
+  const similarNames = useMemo(() => {
+    if (!item || typeof item.x !== 'number' || typeof item.y !== 'number') return [];
+    return namesData
+      .filter((n) => n.Name !== item.Name && typeof n.x === 'number' && typeof n.y === 'number')
+      .map((n) => ({ n, dist: Math.hypot(n.x - item.x, n.y - item.y) }))
+      .sort((a, b) => a.dist - b.dist)
+      .slice(0, 4)
+      .map(({ n }) => getNameMetrics(n, lang));
+  }, [item, lang]);
+
+  if (!item) {
+    return (
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16">
+        <p className="font-editorial text-3xl">{t.noCriteria}</p>
+        <Link to="/list" className="inline-flex items-center gap-2 mt-4 text-xs uppercase tracking-[0.12em] text-[#B84A32]">
+          <ArrowLeft className="w-3.5 h-3.5" /> {t.back}
+        </Link>
+      </div>
+    );
+  }
+
   const handleShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `İsimBul: ${nameData.Name}`,
-          text: `${nameData.Name} isminin anlamını ve istatistiklerini incele!`,
-          url: window.location.href,
-        });
-      } catch (err) { console.error(err); }
-    } else {
-      navigator.clipboard.writeText(window.location.href);
-      alert(t.linkCopied || "Link copied!");
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2200);
+    } catch {
+      // Ignore clipboard failure
     }
   };
 
-  if (!nameData) return <div className="dark:text-white p-6">Name not found</div>;
+  const chartRows = item.eraData.map((d) => ({
+    ...d,
+    eraLabel: lang === 'tr' ? d.labelTr : d.labelEn,
+  }));
 
-  const stats = nameData.Statistics?.Count || {};
-  
-  const chartData = [
-    {
-      name: '> 1923',
-      Male: stats.male?.post1923?.total || 0,
-      Female: stats.female?.post1923?.total || 0
-    },
-    {
-      name: '> 1980',
-      Male: stats.male?.post1980?.total || 0,
-      Female: stats.female?.post1980?.total || 0
-    },
-    {
-      name: '> 2008',
-      Male: stats.male?.post2008?.total || 0,
-      Female: stats.female?.post2008?.total || 0
-    },
-    {
-      name: t.total,
-      Male: stats.male?.total?.total || 0,
-      Female: stats.female?.total?.total || 0
-    },
-  ];
-
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      return (
-        <div style={{
-          background: isDarkMode ? 'rgba(24, 24, 27, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-          backdropFilter: 'blur(4px)',
-          padding: '12px',
-          borderRadius: '12px',
-          border: `1px solid ${isDarkMode ? 'rgba(63, 63, 70, 0.5)' : 'rgba(228, 228, 231, 0.5)'}`,
-          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-          fontFamily: 'sans-serif',
-          minWidth: '160px',
-          color: isDarkMode ? '#fff' : '#18181b',
-        }}>
-          <strong style={{ fontSize: '15px', display: 'block', marginBottom: '8px' }}>
-            {label}
-          </strong>
-          <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
-            {payload.map((entry, index) => (
-              <span key={index} style={{
-                fontSize: '11px',
-                background: `${entry.color}15`,
-                color: entry.color,
-                padding: '3px 8px',
-                borderRadius: '6px',
-                fontWeight: 600,
-                border: `1px solid ${entry.color}40`,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px'
-              }}>
-                {entry.name}: {entry.value}
-              </span>
-            ))}
-          </div>
-          <div style={{
-            fontSize: '11px',
-            color: isDarkMode ? '#a1a1aa' : '#71717a',
-            borderTop: `1px solid ${isDarkMode ? '#3f3f46' : '#e4e4e7'}`,
-            paddingTop: '6px',
-            marginTop: '6px',
-            fontStyle: 'italic'
-          }}>
-            {nameData.Meaning_TR || "No definition available"}
-          </div>
-        </div>
-      );
-    }
-    return null;
-  };
-
-  // Helper to normalize Etymology to an array
-  const etymologies = Array.isArray(nameData.Etymology) 
-    ? nameData.Etymology 
-    : [nameData.Etymology].filter(Boolean);
+  const usageTotal = item.usageStats.single + item.usageStats.start + item.usageStats.end;
+  const liked = isLiked(item.Name);
 
   return (
-    <div className="bg-gray-50 dark:bg-zinc-950 min-h-screen transition-colors duration-200">
-      
-      {/* --- Native React 19 Metadata Support --- */}
-      <title>{nameData.Name} {t.meaning} | İsimBul</title>
-      <meta name="description" content={nameData.Meaning_TR || nameData.Meaning_EN} />
-      <meta property="og:title" content={`${nameData.Name} - İsimBul`} />
-      <meta property="og:description" content={nameData.Meaning_TR} />
+    <article className="max-w-6xl mx-auto px-4 sm:px-6 pt-8 sm:pt-12 pb-16 space-y-12 animate-fade-in">
+      <title>{item.Name} | İsimBul</title>
 
-      <div className="max-w-6xl mx-auto p-6">
-        <Link to="/" className="inline-flex items-center text-gray-500 dark:text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 mb-6 font-medium text-sm">
-          <ArrowLeft className="w-4 h-4 mr-2" /> {t.back}
+      <div>
+        <Link
+          to="/list"
+          className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-[#57524A] dark:text-[#A8A095] hover:text-[#161513] dark:hover:text-[#F2EDE4]"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" /> {t.back}
         </Link>
-
-        {/* Header Card */}
-        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-sm p-8 mb-6 border border-gray-100 dark:border-zinc-800">
-          <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
-                <div>
-                    <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">{nameData.Name}</h1>
-                    <div className="flex flex-wrap gap-2">
-                        {nameData.Is_Quranic && (
-                            <span className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 px-3 py-1 rounded-full text-sm font-medium">
-                                {t.isQuranic}
-                            </span>
-                        )}
-                        
-                        {/* --- UPDATED: Map over etymologies to create multiple badges --- */}
-                        {etymologies.map((etym, index) => (
-                            <span key={index} className="bg-gray-100 dark:bg-zinc-800 text-gray-800 dark:text-zinc-300 px-3 py-1 rounded-full text-sm font-medium border border-gray-200 dark:border-zinc-700">
-                                {etym}
-                            </span>
-                        ))}
-                    </div>
-                </div>
-                {/* butonlar */}
-                <div className='flex items-center gap-3'>
-                  {/* Kalp Butonu */}
-                  <button 
-                      onClick={() => toggleLike(nameData.Name)}
-                      className={`p-3 rounded-full transition-all shadow-sm border ${isLiked(nameData.Name) ? 'bg-red-50 border-red-100 text-red-500 dark:bg-red-900/20 dark:border-red-900/30' : 'bg-gray-50 border-gray-200 text-gray-400 hover:text-red-500 hover:border-red-200 dark:bg-zinc-800 dark:border-zinc-700'}`}
-                  >
-                      <Heart className={`w-8 h-8 ${isLiked(nameData.Name) ? 'fill-current' : ''}`} />
-                  </button>
-
-                  {/* --- Share Button --- */}
-                  <button 
-                      onClick={handleShare}
-                      title={t.share || "Share"}
-                      className="p-3 rounded-full bg-gray-50 border border-gray-200 text-gray-400 hover:text-blue-500 hover:border-blue-200 dark:bg-zinc-800 dark:border-zinc-700 transition-all"
-                  >
-                      <Share2 className="w-8 h-8" />
-                  </button>
-                </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-             <div className="p-6 bg-blue-50/50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-900/30">
-              <div className="flex items-center gap-2 mb-3 text-blue-700 dark:text-blue-300 font-bold uppercase tracking-wide text-xs">
-                <BookOpen className="w-4 h-4" /> {t.meaning}
-              </div>
-              <div className="space-y-4">
-                  <div>
-                      <span className="text-[10px] font-bold text-blue-400/80 uppercase tracking-wider">{t.turkish}</span>
-                      <p className="text-gray-900 dark:text-zinc-100 text-lg font-medium leading-relaxed">{nameData.Meaning_TR || "N/A"}</p>
-                  </div>
-                  {nameData.Meaning_EN && (
-                      <div className="pt-3 border-t border-blue-200/50 dark:border-blue-800/30">
-                        <span className="text-[10px] font-bold text-blue-400/80 uppercase tracking-wider">{t.english}</span>
-                        <p className="text-gray-600 dark:text-zinc-400 italic">{nameData.Meaning_EN}</p>
-                      </div>
-                  )}
-              </div>
-            </div>
-            
-            <div className="space-y-4">
-                {/* Variants */}
-                {nameData.Variants && nameData.Variants.length > 0 && (
-                    <div className="p-5 bg-purple-50/50 dark:bg-purple-900/10 rounded-xl border border-purple-100 dark:border-purple-900/30">
-                        <div className="flex items-center gap-2 mb-3 text-purple-700 dark:text-purple-300 font-bold uppercase tracking-wide text-xs">
-                            <Copy className="w-4 h-4" /> Variants
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                            {nameData.Variants.map(v => (
-                                <div key={v} className="px-3 py-1.5 bg-white dark:bg-purple-950/30 rounded-lg border border-purple-200 dark:border-purple-800/50 text-sm font-medium text-gray-700 dark:text-purple-100 hover:text-purple-600 hover:border-purple-300 dark:hover:border-purple-500 transition-all shadow-sm">
-                                    {v}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-                
-                {/* Derivations */}
-                {nameData.Derivations && nameData.Derivations.length > 0 && (
-                    <div className="p-5 bg-orange-50/50 dark:bg-orange-900/10 rounded-xl border border-orange-100 dark:border-orange-900/30">
-                        <div className="flex items-center gap-2 mb-3 text-orange-700 dark:text-orange-300 font-bold uppercase tracking-wide text-xs">
-                            <GitBranch className="w-4 h-4" /> Related Names
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                            {nameData.Derivations.map(v => (
-                                <Link to={`/name/${v}`} key={v} className="px-3 py-1.5 bg-white dark:bg-orange-950/30 rounded-lg border border-orange-200 dark:border-orange-800/50 text-sm font-medium text-gray-700 dark:text-orange-100 hover:text-orange-600 hover:border-orange-300 dark:hover:border-orange-500 transition-all shadow-sm">
-                                    {v}
-                                </Link>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-            </div>
-          </div>
-        </div>
-        
-        {/* Statistics Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-white dark:bg-zinc-900 rounded-2xl shadow-sm p-8 mb-6 border border-gray-100 dark:border-zinc-800">
-          
-          {/* Usage Chart */}
-          <div className="lg:col-span-2 p-6 ">
-            <h2 className="text-xl font-bold mb-6 text-gray-900 dark:text-white">Usage Distribution (Cumulative)</h2>
-            <div className="h-[350px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" className="dark:opacity-10" />
-                  <XAxis dataKey="name" stroke="#9ca3af" />
-                  <YAxis stroke="#9ca3af" />
-                  <Tooltip 
-                    content={<CustomTooltip/>}
-                    cursor={{fill: 'rgba(255,255,255,0.05)'}}
-                  />
-                  <Legend wrapperStyle={{ paddingTop: '20px' }}/>
-                  <Bar dataKey="Male" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Male Count" />
-                  <Bar dataKey="Female" fill="#ec4899" radius={[4, 4, 0, 0]} name="Female Count" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Stats Cards */}
-          <div className="space-y-6">
-              <div className="p-6 bg-blue-50/50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-900/30">
-                 <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">Total Counts</h3>
-                 <div className="flex justify-between items-center mb-2">
-                    <span className="text-blue-600 dark:text-blue-400 font-medium">Male</span>
-                    <span className="text-2xl font-bold text-gray-900 dark:text-white">{(stats.male?.total?.total || 0).toLocaleString()}</span>
-                 </div>
-                 <div className="flex justify-between items-center">
-                    <span className="text-pink-600 dark:text-pink-400 font-medium">Female</span>
-                    <span className="text-2xl font-bold text-gray-900 dark:text-white">{(stats.female?.total?.total || 0).toLocaleString()}</span>
-                 </div>
-              </div>
-
-              <div className="p-6  bg-blue-50/50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-900/30">
-                 <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">Ranking</h3>
-                 <div className="flex justify-between items-center mb-2">
-                    <span className="text-gray-600 dark:text-gray-300">Male Rank</span>
-                    <span className="text-lg font-bold text-gray-900 dark:text-white">#{nameData.Statistics?.Rank?.male?.toLocaleString() || '-'}</span>
-                 </div>
-                 <div className="flex justify-between items-center">
-                    <span className="text-gray-600 dark:text-gray-300">Female Rank</span>
-                    <span className="text-lg font-bold text-gray-900 dark:text-white">#{nameData.Statistics?.Rank?.female?.toLocaleString() || '-'}</span>
-                 </div>
-              </div>
-          </div>
-
-        </div>
       </div>
-    </div>
+
+      {/* Header */}
+      <header className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-end">
+        <div className="lg:col-span-8">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-medium uppercase tracking-[0.14em] text-[#57524A] dark:text-[#A8A095] mb-3">
+            <span>{t[item.gender]}</span>
+            {item.etymologies.length > 0 && (
+              <>
+                <span>·</span>
+                <span>{item.etymologies.join(' / ')}</span>
+              </>
+            )}
+            {item.clusterName && (
+              <>
+                <span>·</span>
+                <span>{item.clusterName}</span>
+              </>
+            )}
+            {item.Is_Quranic && (
+              <>
+                <span>·</span>
+                <span className="text-[#536B58] dark:text-[#8FB096]">{t.isQuranic}</span>
+              </>
+            )}
+          </div>
+
+          <h1 className="font-editorial text-6xl sm:text-7xl lg:text-8xl font-medium tracking-[-0.025em] leading-[0.98]">
+            {item.Name}
+          </h1>
+
+          <p className="mt-6 font-editorial text-xl sm:text-2xl text-[#36322D] dark:text-[#D5CEC2] leading-snug max-w-2xl">
+            {item.currentMeaning || <span className="italic text-[#878075]">{t.noMeaning}</span>}
+          </p>
+        </div>
+
+        <div className="lg:col-span-4 flex flex-col lg:items-end justify-between gap-6">
+          <div className="lg:text-right">
+            <span className="block text-[11px] uppercase tracking-[0.14em] text-[#878075]">{t.rank}</span>
+            <span className="font-editorial text-5xl sm:text-6xl font-medium text-[#B84A32] dark:text-[#DF735B] tabular-nums leading-none">
+              #{formatRankNum(item.bestRank)}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => toggleLike(item.Name)}
+              className={`inline-flex items-center gap-2 px-4 py-2.5 text-xs font-medium uppercase tracking-[0.1em] border transition-colors ${
+                liked
+                  ? 'bg-[#B84A32] border-[#B84A32] text-[#FAF7F1]'
+                  : 'border-[#161513] dark:border-[#F2EDE4] hover:bg-[#161513] hover:text-[#FAF7F1] dark:hover:bg-[#F2EDE4] dark:hover:text-[#141311]'
+              }`}
+            >
+              <Heart className={`w-3.5 h-3.5 ${liked ? 'fill-current' : ''}`} />
+              <span>{liked ? t.saved : t.save}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleShare}
+              className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-medium uppercase tracking-[0.1em] border border-[#D8D1C5] dark:border-[#332F29] hover:border-[#161513] dark:hover:border-[#F2EDE4] transition-colors"
+            >
+              {copied ? <Check className="w-3.5 h-3.5 text-[#536B58]" /> : <Share2 className="w-3.5 h-3.5" />}
+              <span>{copied ? t.linkCopied : t.share}</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Metadata Strip */}
+      <section className="grid grid-cols-2 lg:grid-cols-4 border-y border-[#161513] dark:border-[#443F37] divide-x divide-[#D8D1C5] dark:divide-[#2C2823]">
+        <div className="py-5 pr-4">
+          <span className="block text-[11px] uppercase tracking-[0.12em] text-[#878075]">{t.peakEra}</span>
+          <span className="block font-editorial text-3xl font-medium mt-1 tabular-nums">{item.peakEra}</span>
+        </div>
+        <div className="py-5 px-4">
+          <span className="block text-[11px] uppercase tracking-[0.12em] text-[#878075]">{t.count}</span>
+          <span className="block font-editorial text-3xl font-medium mt-1 tabular-nums">{item.totalCount.toLocaleString()}</span>
+        </div>
+        <div className="py-5 px-4">
+          <span className="block text-[11px] uppercase tracking-[0.12em] text-[#878075]">{t.syllables}</span>
+          <span className="block font-editorial text-3xl font-medium mt-1 tabular-nums">{item.syllables}</span>
+        </div>
+        <div className="py-5 pl-4">
+          <span className="block text-[11px] uppercase tracking-[0.12em] text-[#878075]">{t.trajectory}</span>
+          <span className="block text-sm font-medium uppercase tracking-[0.1em] mt-2 text-[#B84A32] dark:text-[#DF735B]">
+            {item.trend === 'up' ? t.trendUp : item.trend === 'steady' ? t.trendSteady : t.trendDown}
+          </span>
+        </div>
+      </section>
+
+      {/* Era Popularity Chart */}
+      <section className="py-8 border-b border-[#D8D1C5] dark:border-[#332F29]">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[#B84A32] dark:text-[#DF735B]">
+              {t.usage_chart}
+            </p>
+          </div>
+          <div className="inline-flex border border-[#D8D1C5] dark:border-[#332F29]">
+            <button
+              type="button"
+              onClick={() => setChartMode('total')}
+              className={`px-3.5 py-1.5 text-xs font-medium uppercase tracking-[0.08em] ${
+                chartMode === 'total'
+                  ? 'bg-[#161513] text-[#FAF7F1] dark:bg-[#F2EDE4] dark:text-[#141311]'
+                  : 'text-[#57524A] dark:text-[#A8A095]'
+              }`}
+            >
+              {t.modeTotal}
+            </button>
+            <button
+              type="button"
+              onClick={() => setChartMode('gender')}
+              className={`px-3.5 py-1.5 text-xs font-medium uppercase tracking-[0.08em] border-l border-[#D8D1C5] dark:border-[#332F29] ${
+                chartMode === 'gender'
+                  ? 'bg-[#161513] text-[#FAF7F1] dark:bg-[#F2EDE4] dark:text-[#141311]'
+                  : 'text-[#57524A] dark:text-[#A8A095]'
+              }`}
+            >
+              {t.modeGender}
+            </button>
+          </div>
+        </div>
+
+        <div className="w-full h-72 sm:h-80">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartRows} margin={{ top: 12, right: 12, left: 0, bottom: 8 }}>
+              <CartesianGrid stroke={isDark ? '#2C2823' : '#E2DBD0'} vertical={false} />
+              <XAxis dataKey="eraLabel" stroke={isDark ? '#9A9287' : '#6E675E'} fontSize={12} tickLine={false} />
+              <YAxis stroke={isDark ? '#9A9287' : '#6E675E'} fontSize={12} tickLine={false} axisLine={false} width={54} />
+              <Tooltip
+                cursor={{ fill: isDark ? '#26231F' : '#EAE4D8', opacity: 0.6 }}
+                contentStyle={{
+                  backgroundColor: isDark ? '#1D1B18' : '#FAF7F1',
+                  borderColor: isDark ? '#332F29' : '#D8D1C5',
+                  borderRadius: '0px',
+                  fontSize: '12px',
+                }}
+              />
+              {chartMode === 'total' ? (
+                <Bar dataKey="count" name={t.total} fill={isDark ? '#D96B52' : '#B84A32'} maxBarSize={64} />
+              ) : (
+                <>
+                  <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }} />
+                  <Bar dataKey="male" name={t.male} fill={isDark ? '#6B88A6' : '#3F556B'} maxBarSize={40} />
+                  <Bar dataKey="female" name={t.female} fill={isDark ? '#D96B52' : '#B84A32'} maxBarSize={40} />
+                </>
+              )}
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
+
+      {/* Compound Usage & Gender Split */}
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {usageTotal > 0 && (
+          <div className="bg-[#FAF7F1] dark:bg-[#1D1B18] border border-[#D8D1C5] dark:border-[#332F29] p-6">
+            <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[#B84A32] dark:text-[#DF735B]">
+              {t.compoundUsage}
+            </p>
+            <div className="mt-5 h-3 w-full flex bg-[#EAE4D8] dark:bg-[#2C2823]">
+              <div style={{ width: `${(item.usageStats.single / usageTotal) * 100}%` }} className="bg-[#B84A32]" />
+              <div style={{ width: `${(item.usageStats.start / usageTotal) * 100}%` }} className="bg-[#B88635]" />
+              <div style={{ width: `${(item.usageStats.end / usageTotal) * 100}%` }} className="bg-[#3F556B]" />
+            </div>
+            <div className="grid grid-cols-3 gap-3 mt-4 text-xs tabular-nums">
+              <div>
+                <span className="text-[#878075] block">{t.usageSingle}</span>
+                <strong className="font-editorial text-xl">
+                  {Math.round((item.usageStats.single / usageTotal) * 100)}%
+                </strong>
+              </div>
+              <div>
+                <span className="text-[#878075] block">{t.usageStart}</span>
+                <strong className="font-editorial text-xl">
+                  {Math.round((item.usageStats.start / usageTotal) * 100)}%
+                </strong>
+              </div>
+              <div>
+                <span className="text-[#878075] block">{t.usageEnd}</span>
+                <strong className="font-editorial text-xl">
+                  {Math.round((item.usageStats.end / usageTotal) * 100)}%
+                </strong>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="bg-[#FAF7F1] dark:bg-[#1D1B18] border border-[#D8D1C5] dark:border-[#332F29] p-6">
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[#3F556B] dark:text-[#86A4C2]">
+            {t.genderSplit}
+          </p>
+          <div className="grid grid-cols-2 gap-6 mt-5">
+            <div>
+              <span className="text-xs uppercase tracking-[0.1em] text-[#878075]">{t.male}</span>
+              <div className="font-editorial text-3xl mt-1 tabular-nums">{item.maleCount.toLocaleString()}</div>
+              <span className="text-xs text-[#878075] tabular-nums">#{formatRankNum(item.maleRank)}</span>
+            </div>
+            <div>
+              <span className="text-xs uppercase tracking-[0.1em] text-[#878075]">{t.female}</span>
+              <div className="font-editorial text-3xl mt-1 tabular-nums">{item.femaleCount.toLocaleString()}</div>
+              <span className="text-xs text-[#878075] tabular-nums">#{formatRankNum(item.femaleRank)}</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Variants & Derivations */}
+      {(item.Variants?.length > 0 || item.Derivations?.length > 0) && (
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-8 border-t border-[#D8D1C5] dark:border-[#332F29] pt-8">
+          {item.Variants?.length > 0 && (
+            <div>
+              <h2 className="text-[11px] font-medium uppercase tracking-[0.14em] text-[#878075] mb-3">
+                {t.variants}
+              </h2>
+              <div className="flex flex-wrap gap-x-4 gap-y-2">
+                {item.Variants.map((v) => (
+                  <span key={v} className="font-editorial text-xl">
+                    {v}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {item.Derivations?.length > 0 && (
+            <div>
+              <h2 className="text-[11px] font-medium uppercase tracking-[0.14em] text-[#878075] mb-3">
+                {t.derivations}
+              </h2>
+              <div className="flex flex-wrap gap-x-4 gap-y-2">
+                {item.Derivations.map((v) => (
+                  <Link
+                    key={v}
+                    to={`/name/${encodeURIComponent(v)}`}
+                    className="font-editorial text-xl text-[#B84A32] dark:text-[#DF735B] hover:underline"
+                  >
+                    {v} ↗
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Similar Names (Semantic Coordinates) */}
+      {similarNames.length > 0 && (
+        <section>
+          <div className="border-b border-[#D8D1C5] dark:border-[#332F29] pb-3 mb-5">
+            <h2 className="font-editorial text-2xl sm:text-3xl font-medium">{t.similar_names}</h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {similarNames.map((sim) => (
+              <button
+                key={sim.Name}
+                type="button"
+                onClick={() => navigate(`/name/${encodeURIComponent(sim.Name)}`)}
+                className="group text-left bg-[#FAF7F1] dark:bg-[#1D1B18] border border-[#D8D1C5] dark:border-[#332F29] hover:border-[#161513] dark:hover:border-[#F2EDE4] p-5 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <span className="font-editorial text-2xl font-medium group-hover:text-[#B84A32] transition-colors">
+                    {sim.Name}
+                  </span>
+                  <ArrowUpRight className="w-4 h-4 text-[#878075] group-hover:text-[#B84A32]" />
+                </div>
+                <p className="text-xs text-[#57524A] dark:text-[#A8A095] line-clamp-2 mt-2">
+                  {sim.currentMeaning || t.noMeaning}
+                </p>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+    </article>
   );
 }

@@ -1,2 +1,172 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap');
 @import "tailwindcss";
-@variant dark (&:where(.dark, .dark *));
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  body {
+    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: #F4F0E8;
+    color: #161513;
+  }
+
+  .dark body {
+    background-color: #141311;
+    color: #F2EDE4;
+  }
+}
+
+.font-editorial {
+  font-family: 'Newsreader', Georgia, 'Times New Roman', serif;
+}
+
+.font-ui {
+  font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes whooshIn {
+  0% { opacity: 0; transform: translateX(52px) skewX(-3deg); filter: blur(2px); }
+  70% { opacity: 1; transform: translateX(-3px) skewX(0.5deg); filter: blur(0px); }
+  100% { opacity: 1; transform: translateX(0) skewX(0deg); filter: blur(0px); }
+}
+
+@keyframes whooshOut {
+  0% { opacity: 1; transform: translateX(0) skewX(0deg); filter: blur(0px); }
+  100% { opacity: 0; transform: translateX(-56px) skewX(4deg); filter: blur(3px); }
+}
+
+@keyframes marqueeScroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.24s ease-out forwards;
+}
+
+.animate-whoosh-in {
+  animation: whooshIn 0.46s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  will-change: transform, opacity;
+}
+
+.animate-whoosh-out {
+  animation: whooshOut 0.4s cubic-bezier(0.55, 0, 0.75, 0.25) forwards;
+  will-change: transform, opacity;
+}
+
+.marquee-track {
+  animation: marqueeScroll 44s linear infinite;
+  will-change: transform;
+}
+
+.marquee-track:hover,
+.marquee-track:focus-within {
+  animation-play-state: paused;
+}
+
+.marquee-mask {
+  -webkit-mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
+  mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track,
+  .animate-fade-in,
+  .animate-whoosh-in,
+  .animate-whoosh-out {
+    animation: none;
+  }
+}
+
+/* ============================================================================
+ * İSİMLE (WORDLE) ANIMATIONS & PALETTE TOKENS
+ * ============================================================================ */
+:root {
+  --isimle-tile-bg: #FAF7F1;
+  --isimle-tile-border: #161513;
+  --isimle-tile-text: #161513;
+  --isimle-correct: #4E6553;  /* Sage */
+  --isimle-present: #C4923D;  /* Ochre */
+  --isimle-absent: #6E675E;   /* Warm Stone */
+}
+
+.dark {
+  --isimle-tile-bg: #1D1B18;
+  --isimle-tile-border: #A8A095;
+  --isimle-tile-text: #F2EDE4;
+  --isimle-correct: #587A5F;
+  --isimle-present: #B88635;
+  --isimle-absent: #3A352E;
+}
+
+@keyframes tilePop {
+  0% { transform: scale(0.88); }
+  50% { transform: scale(1.09); }
+  100% { transform: scale(1); }
+}
+
+@keyframes rowShake {
+  0%, 100% { transform: translateX(0); }
+  15%, 45%, 75% { transform: translateX(-6px); }
+  30%, 60%, 90% { transform: translateX(6px); }
+}
+
+@keyframes tileFlip {
+  0% {
+    transform: rotateX(0deg);
+    background-color: var(--isimle-tile-bg);
+    border-color: var(--isimle-tile-border);
+    color: var(--isimle-tile-text);
+  }
+  49.9% {
+    transform: rotateX(-90deg);
+    background-color: var(--isimle-tile-bg);
+    border-color: var(--isimle-tile-border);
+    color: var(--isimle-tile-text);
+  }
+  50% {
+    transform: rotateX(-90deg);
+    background-color: var(--flip-color);
+    border-color: var(--flip-color);
+    color: #FAF7F1;
+  }
+  100% {
+    transform: rotateX(0deg);
+    background-color: var(--flip-color);
+    border-color: var(--flip-color);
+    color: #FAF7F1;
+  }
+}
+
+@keyframes tileBounce {
+  0%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-16px); }
+  65% { transform: translateY(4px); }
+  85% { transform: translateY(-5px); }
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.anim-pop { animation: tilePop 0.12s ease-out; }
+.anim-shake { animation: rowShake 0.42s ease-in-out; }
+.anim-flip { animation: tileFlip 0.5s ease-in-out both; }
+.anim-bounce { animation: tileBounce 0.65s ease-in-out both; }
+.anim-modal { animation: modalIn 0.22s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-pop,
+  .anim-shake,
+  .anim-flip,
+  .anim-bounce,
+  .anim-modal {
+    animation: none;
+  }
+}
