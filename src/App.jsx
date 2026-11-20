@@ -3,7 +3,8 @@ import { BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { LanguageProvider, useTranslation } from './context/LanguageContext';
 import { LikesProvider, useLikes } from './context/LikesContext';
-import { namesData } from './data';
+import data from '../data.json';
+const { namesData } = data;
 import { Sun, Moon, Shuffle, Menu, X } from 'lucide-react';
 
 import BrandWordmark from './components/BrandWordmark';

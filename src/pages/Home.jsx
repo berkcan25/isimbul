@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { namesData } from '../data';
+import data from '../data.json';
+const { namesData } = data;
 import { useTranslation } from '../context/LanguageContext';
 import { useLikes } from '../context/LikesContext';
 import { useTheme } from '../context/ThemeContext';

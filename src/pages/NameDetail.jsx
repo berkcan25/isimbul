@@ -3,7 +3,8 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from '../context/LanguageContext';
 import { useLikes } from '../context/LikesContext';
 import { useTheme } from '../context/ThemeContext';
-import { namesData } from '../data';
+import data from '../data.json';
+const { namesData } = data;
 import {
   BarChart,
   Bar,
